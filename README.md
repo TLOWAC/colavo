@@ -1,73 +1,189 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+## 과제 스펙 정의
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+### Request 스펙 정리
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
-
-```bash
-$ npm install
+```ts
+  interface RequestBody {
+    start_day_identifier: string
+    timezone_identifier: string
+    service_duration: number
+    days: number | null
+    timeslot_interval: number | null
+    is_ignore_schedule: boolean | null
+    is_ignore_workhour: boolean | null
+  }
 ```
 
-## Running the app
+<details>
+  <summary>Request 데이터 예제 확인하기</summary>
 
-```bash
-# development
-$ npm run start
+  ```json
+  {
+    "start_day_identifier" : "20210910",
+    "days": 3,
+    "service_duration": 3600,
+    "timeslot_interval": 1800,
+    "is_ignore_schedule": true,
+    "is_ignore_workhour": false,
+    "timezone_identifier": "Asia/Seoul",
+  }
+  ```
 
-# watch mode
-$ npm run start:dev
+</details>
 
-# production mode
-$ npm run start:prod
+
+| value                  | type              |     default     | description                                    |
+| ---------------------- | ----------------- | :-------------: | ---------------------------------------------- |
+| `start_day_identifier` | `string`          |      none       | 시작일 ( "YYYYMMDD" )                          |
+| `timezone_identifier`  | `string`          |      none       | 타임존 ( "America/Los_Angeles", "Asia/Seoul" ) |
+| `service_duration`     | `number`          |      none       | 미용 서비스 제공 시간 ( s, 3600 > 1시간 )      |
+| `days`                 | `number \| null`  | 1 (단위 : day)  | 달력의 일/주/월/년 과 같이 용도별 표시         |
+| `timeslot_interval`    | `number \| null`  | 30 (단위 : min) | 예약 가능한 시간대의 간격 ( 예: 14:00, 14:30 ) |
+| `is_ignore_schedule`   | `boolean \| null` |      false      | true 인 경우, 다른 고객의 예약 고려 X          |
+| `is_ignore_workhour`   | `boolean \| null` |      false      | true 인 경우, 휴일,오픈시간,마감시간 고려 X    |
+
+
+<br/>
+
+
+### Response 스펙 정리
+
+```ts
+  type ResponseBody = DayTimetable[]
+
+  interface DayTimetable {
+    start_of_day: number // Unixstamp seconds
+    day_modifier: number
+    is_day_off: boolean
+    timeslots: Timeslot[]
+  }
+
+  interface Timeslot {
+    begin_at: number // Unixstamp seconds
+    end_at: number // Unixstamp seconds
+  }
 ```
 
-## Test
+<details>
+  <summary>Response 데이터 예제 확인하기</summary>
 
-```bash
-# unit tests
-$ npm run test
+  ```json
+    [ 
+      { 
+        "start_of_day": 1538697600, 
+        "day_modifier": 2, 
+        "is_day_off": false, 
+        "timeslots": [ 
+          { 
+            "begin_at": 1538740800, 
+            "end_at": 1538744400 
+          }, 
+          { 
+            "begin_at": 1538742600, 
+            "end_at": 1538746200 
+          }, 
+          { 
+            "begin_at": 1538744400, 
+            "end_at": 1538748000 
+          } 
+        ] 
+      }, 
+      { 
+        "start_of_day": 1538784000, 
+        "day_modifier": 3, 
+        "is_day_off": false, 
+        "timeslots": [ 
+          { 
+            "begin_at": 1538827200, 
+            "end_at": 1538830800 
+          }, 
+          { 
+            "begin_at": 1538829000, 
+            "end_at": 1538832600 
+          }, 
+          { 
+            "begin_at": 1538830800, 
+            "end_at": 1538834400 
+          } 
+        ] 
+      } 
+    ]
+  ```
 
-# e2e tests
-$ npm run test:e2e
+</details>
 
-# test coverage
-$ npm run test:cov
+
+<details>
+  <summary>Response 데이터 예제 확인하기 (KST)</summary>
+
+```json
+[
+  {
+    "start_of_day": "2018-10-06T00:00:00+09:00",
+    "day_modifier": 2,
+    "is_day_off": false,
+    "timeslots": [
+      {
+        "begin_at": "2018-10-06T09:00:00+09:00",
+        "end_at": "2018-10-06T10:00:00+09:00"
+      },
+      {
+        "begin_at": "2018-10-06T09:30:00+09:00",
+        "end_at": "2018-10-06T10:30:00+09:00"
+      },
+      {
+        "begin_at": "2018-10-06T10:00:00+09:00",
+        "end_at": "2018-10-06T11:00:00+09:00"
+      }
+    ]
+  },
+  {
+    "start_of_day": "2018-10-07T00:00:00+09:00",
+    "day_modifier": 3,
+    "is_day_off": false,
+    "timeslots": [
+      {
+        "begin_at": "2018-10-07T09:00:00+09:00",
+        "end_at": "2018-10-07T10:00:00+09:00"
+      },
+      {
+        "begin_at": "2018-10-07T09:30:00+09:00",
+        "end_at": "2018-10-07T10:30:00+09:00"
+      },
+      {
+        "begin_at": "2018-10-07T10:00:00+09:00",
+        "end_at": "2018-10-07T11:00:00+09:00"
+      }
+    ]
+  }
+]
+
 ```
 
-## Support
+</details>
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
 
-## Stay in touch
+| value                | type          | default | description                                                                                         |
+| -------------------- | ------------- | :-----: | --------------------------------------------------------------------------------------------------- |
+| `start_of_day`       | `number`      |  none   | 예약 기준일 ( 하루 단위 )                                                                           |
+| `day_modifier`       | `number`      |  none   | 조회일 기준 `start_of_day` 와의 차이값 <br/> ( 예시 : 2일후 예약이 가능한 경우 `day_modifier : 2` ) |
+| `is_day_off`         | `number`      |  none   | 가게 휴무일                                                                                         |
+| `timeslots`          | `Timeslot[] ` |  none   | `start_of_day` 기준 당일 예약 가능 스케줄 목록                                                      |
+| `Timeslot[begin_at]` | `number`      |  none   | `start_of_day` 기준 당일 예약 가능 스케줄 - 시작 시간                                               |
+| `Timeslot[end_at]`   | `number`      |  none   | `start_of_day` 기준 당일 예약 가능 스케줄 - 종료 시간                                               |
 
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
-## License
+### API 구현 케이스
 
-Nest is [MIT licensed](LICENSE).
+1. **[기본]** `start_day_identifier,` `timezone_identifier`, `service_duration`, `days`,`timeslot_interval` 파라미터에 따른 `DayTimetable` 반환 하는 API 구현
+2. `is_ignore_schedule:false`, `is_ignore_workhour:true` 케이스 구현 
+3. `is_ignore_schedule:true`, `is_ignore_workhour:false` 케이스 구현
+4. `is_ignore_schedule:false`, `is_ignore_workhour:false` 케이스 구현
+
+
+
+<br/>
+
+
