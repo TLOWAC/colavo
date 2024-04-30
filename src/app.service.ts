@@ -10,10 +10,6 @@ dayjs.extend(timezone);
 
 @Injectable()
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
-  }
-
   getTimeSlots(timeSlotData: TimeSlotsReqDto) {
     const {
       start_day_identifier,
@@ -39,9 +35,6 @@ export class AppService {
         .format('ddd')
         .toLowerCase();
 
-      // console.log('startDayUnixStamp:', startDayUnixStamp);
-      // console.log('dayOfWork:', dayOfWeek);
-
       // dayOfWeek 를 사용해서 data[workhours] 필터링
       const workDayInfo = workhours.find(
         (workhour) => workhour.key === dayOfWeek,
@@ -54,8 +47,6 @@ export class AppService {
       const closeTimeUnixInterval = is_ignore_workhour
         ? 86340 // 23시 59분
         : workDayInfo.close_interval;
-
-      // console.log('workDayInfo:', workDayInfo);
 
       const timeslots = [];
       for (
@@ -73,7 +64,6 @@ export class AppService {
         }
         // 만약 범위를 벗어난 경우에는 해당 데이터는 timeslots 에 입력하지 않는다.
         timeslots.push({ begin_at, end_at });
-        // console.log('timeslots:', timeslots);
       }
 
       if (!is_ignore_schedule) {
@@ -108,7 +98,6 @@ export class AppService {
         });
       }
 
-      // console.log('dayTimetable:', JSON.stringify(dayTimetable, null, 2));
       startDay = startDay.add(1, 'day');
     }
 
