@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TimeSlotsReqDto } from './dto/timeslot.req-dto';
-import { events, workhours } from './sample-data';
+import { events, workhours } from '@data';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -9,7 +9,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 @Injectable()
-export class AppService {
+export class ReservationService {
   getTimeSlots(timeSlotData: TimeSlotsReqDto) {
     const {
       start_day_identifier,
