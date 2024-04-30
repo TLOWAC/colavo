@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TimeSlotsReqDto } from './dto/timeslot.req-dto';
-import { events, workhours } from '@data';
+import { events, workhours } from '../../data';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -22,15 +22,16 @@ export class ReservationService {
       is_ignore_workhour,
     } = timeSlotData;
 
-    let startDay = dayjs(start_day_identifier, 'YYYYMMDD');
+    let startDay = dayjs.utc(start_day_identifier, 'YYYYMMDD');
+
     const dayTimetable = [];
 
-    for (let i = 1; i <= days; i++) {
+    for (let i = 0; i < days; i++) {
       // [fin] start_day_identifier ~ start_day_identifier + days 일별 날짜 값 구하기 -> startDayUnixStamp
       const startDayUnixStamp = startDay.unix();
+
       // [fin] startDayUnixStamp 와 timezone_identifier 를 사용해서 나라별 타임존에 맞는 요일 구하기 -> dayOfWeek
-      const dayOfWeek = dayjs
-        .unix(startDayUnixStamp)
+      const dayOfWeek = startDay
         .tz(timezone_identifier)
         .format('ddd')
         .toLowerCase();
@@ -41,25 +42,33 @@ export class ReservationService {
       );
 
       // is_ignore_workhour 가 true 인 경우 0시 00분 ~ 23시 59분으로 openTimeUnixInterval, closeTimeUnixInterval 설정
-      const openTimeUnixInterval = is_ignore_workhour
-        ? 0 // 자정
-        : workDayInfo.open_interval;
-      const closeTimeUnixInterval = is_ignore_workhour
-        ? 86340 // 23시 59분
-        : workDayInfo.close_interval;
+      const openTimeUnixTimestamp = is_ignore_workhour
+        ? startDayUnixStamp + 0 // 자정
+        : startDayUnixStamp + workDayInfo.open_interval;
+      const closeTimeUnixTimestamp = is_ignore_workhour
+        ? startDayUnixStamp + 86340 // 23시 59분
+        : startDayUnixStamp + workDayInfo.close_interval;
 
       const timeslots = [];
       for (
-        let i = openTimeUnixInterval; // 오픈 시간
-        i < closeTimeUnixInterval; // 마감 시간
+        let i = openTimeUnixTimestamp; // 오픈 시간
+        i < closeTimeUnixTimestamp; // 마감 시간
         i += timeslot_interval // 간격
       ) {
-        const begin_at = i + startDayUnixStamp; // 오픈 기준 시간 + 시작일
+        const begin_at = i; // 오픈 기준 시간 + 시작일
         const end_at = begin_at + service_duration; // 마감 기준 시간 + 시작일 + 서비스 시간
+        console.log(
+          `
+          오픈 시간: ${i},
+          마감 시간: ${closeTimeUnixTimestamp},
+          서비스 시간: ${service_duration},
+          예약 시작 시간: ${begin_at},
+          예약 종료 시간: ${end_at},`,
+        );
 
         // end_at 이 가게 운영 마감 시간(UnixStamp) 범위 안에 있는지 확인.
         // end_at 이 가게 운영 시간을 넘어가면 timeslots 에 추가하지 않음.
-        if (end_at > closeTimeUnixInterval) {
+        if (end_at > closeTimeUnixTimestamp) {
           continue;
         }
         // 만약 범위를 벗어난 경우에는 해당 데이터는 timeslots 에 입력하지 않는다.
@@ -85,14 +94,14 @@ export class ReservationService {
         });
         dayTimetable.push({
           start_of_day: startDayUnixStamp,
-          day_modifier: '',
+          day_modifier: i,
           is_day_off: workDayInfo.is_day_off,
           timeslots: filteredTimeSlots,
         });
       } else {
         dayTimetable.push({
           start_of_day: startDayUnixStamp,
-          day_modifier: '',
+          day_modifier: i,
           is_day_off: workDayInfo.is_day_off,
           timeslots: timeslots,
         });
