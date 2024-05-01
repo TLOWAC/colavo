@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { TimeSlotsReqDto } from './dto/timeslot.req-dto';
 import { events, workhours } from '../../data';
+import {
+  DAY_START_UNIX_INTERVAL,
+  DAY_END_UNIX_INTERVAL,
+} from '../../common/constants/time';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -12,74 +16,75 @@ dayjs.extend(timezone);
 export class ReservationService {
   getTimeSlots(timeSlotData: TimeSlotsReqDto) {
     const {
-      start_day_identifier,
-      timezone_identifier,
-      service_duration, // UnixInterval
+      startDayIdentifier,
+      timezoneIdentifier,
+      serviceDuration, // UnixInterval
       days,
-      // FIXME: timeslot_interval 변수명을 timeslot_interval: timeslotUnixInterval 로 변경
-      timeslot_interval, // UnixInterval
-      is_ignore_schedule,
-      is_ignore_workhour,
+      timeslotInterval, // UnixInterval
+      isIgnoreSchedule,
+      isIgnoreWorkhour,
     } = timeSlotData;
 
-    let startDay = dayjs.utc(start_day_identifier, 'YYYYMMDD');
+    // NOTE: tz 기준 Dayjs 객체 생성
+    let startDay = dayjs.tz(startDayIdentifier, 'YYYYMMDD', timezoneIdentifier);
 
     const dayTimetable = [];
 
+    // NOTE: 일별 예약 가능 목록 생성
     for (let i = 0; i < days; i++) {
-      // [fin] start_day_identifier ~ start_day_identifier + days 일별 날짜 값 구하기 -> startDayUnixStamp
+      // NOTE: startDay(Dayjs 객체) 로 Unix TimeStamp 값 구하기 (tz 별로 "20210509" 값에 대한 Unix TimeStamp 값이 다름)
+      // Asia/Seoul => 1620486000 , America/Los_Angeles => 1620543600
       const startDayUnixStamp = startDay.unix();
 
-      // [fin] startDayUnixStamp 와 timezone_identifier 를 사용해서 나라별 타임존에 맞는 요일 구하기 -> dayOfWeek
-      const dayOfWeek = startDay
-        .tz(timezone_identifier)
-        .format('ddd')
-        .toLowerCase();
+      // NOTE: 타임존에 맞는 요일 구하기
+      // workhours.json 데이터 조회를 위해 요일 정보를 소문자로 변환
+      const dayOfWeek = startDay.format('ddd').toLowerCase();
 
-      // dayOfWeek 를 사용해서 data[workhours] 필터링
+      // NOTE: dayOfWeek 를 사용해서 workhours.json 에서 일치하는 요일의 데이터 가져오기
+      // open_interval, close_interval, is_day_off
       const workDayInfo = workhours.find(
         (workhour) => workhour.key === dayOfWeek,
       );
 
-      // is_ignore_workhour 가 true 인 경우 0시 00분 ~ 23시 59분으로 openTimeUnixInterval, closeTimeUnixInterval 설정
-      const openTimeUnixTimestamp = is_ignore_workhour
-        ? startDayUnixStamp + 0 // 자정
+      // NOTE: 가게 오픈 시간 설정
+      // isIgnoreWorkhour: true  => startDayUnixStamp(UnixTimeStamp, 00시00분00초) + DAY_START_UNIX_INTERVAL(UnixInterval, 0)
+      // isIgnoreWorkhour: false => startDayUnixStamp(UnixTimeStamp, 00시00분00초) + open_interval(UnixInterval,오픈시간)
+      const openTimeUnixTimestamp = isIgnoreWorkhour
+        ? startDayUnixStamp + DAY_START_UNIX_INTERVAL // 자정
         : startDayUnixStamp + workDayInfo.open_interval;
-      const closeTimeUnixTimestamp = is_ignore_workhour
-        ? startDayUnixStamp + 86340 // 23시 59분
+
+      // NOTE: 가게 마감 시간 설정
+      // isIgnoreWorkhour: true  => startDayUnixStamp(UnixTimeStamp, 00시00분00초) + DAY_END_UNIX_INTERVAL(UnixInterval, 23시59분)
+      // isIgnoreWorkhour: false => startDayUnixStamp(UnixTimeStamp, 00시00분00초) + close_interval(UnixInterval,마감시간)
+      const closeTimeUnixTimestamp = isIgnoreWorkhour
+        ? startDayUnixStamp + DAY_END_UNIX_INTERVAL // 23시 59분
         : startDayUnixStamp + workDayInfo.close_interval;
 
+      // NOTE: 가게 예약 가능 시간 설정
       const timeslots = [];
       for (
         let i = openTimeUnixTimestamp; // 오픈 시간
         i < closeTimeUnixTimestamp; // 마감 시간
-        i += timeslot_interval // 간격
+        i += timeslotInterval // 예약 간격
       ) {
-        const begin_at = i; // 오픈 기준 시간 + 시작일
-        const end_at = begin_at + service_duration; // 마감 기준 시간 + 시작일 + 서비스 시간
-        console.log(
-          `
-          오픈 시간: ${i},
-          마감 시간: ${closeTimeUnixTimestamp},
-          서비스 시간: ${service_duration},
-          예약 시작 시간: ${begin_at},
-          예약 종료 시간: ${end_at},`,
-        );
+        const begin_at = i; // 예약 시작 시간
+        const end_at = begin_at + serviceDuration; // 예약 시작 시간 + 서비스 시간
 
-        // end_at 이 가게 운영 마감 시간(UnixStamp) 범위 안에 있는지 확인.
-        // end_at 이 가게 운영 시간을 넘어가면 timeslots 에 추가하지 않음.
-        if (end_at > closeTimeUnixTimestamp) {
+        // NOTE: 가게 예약 가능 시간 설정 예외처리
+        // 1. end_at 이 가게 운영 마감 시간(UnixStamp) 범위 밖인 경우
+        // 2. isIgnoreWorkhour: true 인 경우, 가게 운영 마감시간과 서비스 종료 시간 비교 X
+        if (end_at > closeTimeUnixTimestamp && !isIgnoreWorkhour) {
           continue;
         }
-        // 만약 범위를 벗어난 경우에는 해당 데이터는 timeslots 에 입력하지 않는다.
+
+        // NOTE: 가게 예약 가능 시간 추가
         timeslots.push({ begin_at, end_at });
       }
 
-      if (!is_ignore_schedule) {
-        // timeslots 필터링 스케줄이 겹치는 경우 제외
-        // event_sample 데이터와 비교
+      // NOTE: 가게 예약 가능 시간 설정 예외처리 - isIgnoreSchedule
+      if (!isIgnoreSchedule) {
+        // NOTE: 예약 스케줄(event.json) 이 겹치는 경우 가게 예약 가능 시간에서 제외
         const filteredTimeSlots = timeslots.filter((timeSlot) => {
-          // Check if the time slot overlaps with any event
           for (const event of events) {
             if (
               (timeSlot.begin_at >= event.begin_at &&
@@ -107,19 +112,9 @@ export class ReservationService {
         });
       }
 
+      // NOTE: 날짜 데이터 증가
       startDay = startDay.add(1, 'day');
     }
-
-    // request dto destructuring
-    // [fin] start_day_identifier ~ start_day_identifier + days 일별 날짜 값 구하기 -> startDayUnixStamp
-    // [fin] startDayUnixStamps 와 timezone_identifier 를 사용해서 나라별 타임존에 맞는 요일 구하기 -> dayOfWeek
-    // [fin] dayOfWeek 를 사용해서 data[workhours] 필터링
-    // [fin] req[is_ignore_schedule] 값 검증 ( data[events] 데이터 검증 )
-    // [fin] is_ignore_workhour 가 true 인 경우 0시 00분 ~ 23시 59분으로 openTimeUnixInterval, closeTimeUnixInterval 설정
-    // open_interval, close_interval 을 기준으로 res[timeslots] begin_at, end_at 범위 설정 및 req[timeslot_interval] 단위로 예약 시간 주기 설정
-    // - req[is_ignore_workhour] 값 검증 ( data[workhours] 데이터 검증 )
-    // - req[service_duration] 값 검증 ( service_duration 이 다른 사용자의 예약 시작 시간에 겹치지 않고 가게의 마감 시간내 마무리가 가능한지 검증 )
-    // ? timeslot_interval 은 openTime += timeslot_interval 해서 예약 가능 목록을 출력할때 사용하고, service_duration 은 end_at += service_duration 해서 events 설정할때 사용하는건가?
 
     return dayTimetable;
   }
