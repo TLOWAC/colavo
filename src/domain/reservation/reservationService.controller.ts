@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 import { TimeSlotsReqDto } from './dto/timeslot.req-dto';
-import { DayTimetableDto } from './dto/timeslot.res-dto ';
+import { DayTimetableDto } from './dto/timeslot.res-dto';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Reservation')
